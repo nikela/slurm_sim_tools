@@ -7,14 +7,14 @@ LABEL desc="UB Slurm simulator"
 USER root
 
 # install build and run essential
-RUN apt update && \
-    apt install -y build-essential git sudo vim zstd libzstd-dev && \
-    apt install -y munge libmunge-dev libhdf5-dev \
+RUN apt-get update && \
+    apt-get install -y build-essential git sudo vim zstd libzstd-dev && \
+    apt-get install -y munge libmunge-dev libhdf5-dev \
         libjwt-dev libyaml-dev libdbus-1-dev \
         libmariadb-dev mariadb-server mariadb-client && \
-    apt install -y libssl-dev openssh-server openssh-client libssh-dev && \
+    apt-get install -y libssl-dev openssh-server openssh-client libssh-dev && \
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-    sudo apt install -y ./google-chrome-stable_current_amd64.deb && \
+    sudo apt-get install -y ./google-chrome-stable_current_amd64.deb && \
     rm ./google-chrome-stable_current_amd64.deb
 
 
@@ -28,15 +28,16 @@ ENV NB_USER="${NB_USER}" \
     NB_GID=${NB_GID} \
     HOME="/home/${NB_USER}"
 
-RUN usermod --login ${NB_USER} --move-home --home /home/${NB_USER} jovyan && \
-    groupadd -g ${NB_GID} ${NB_GROUP} && \
-    usermod -g ${NB_GROUP} ${NB_USER} && \
-    usermod -a -G users ${NB_USER} && \
-    usermod -a -G sudo ${NB_USER} &&  \
-    echo "${NB_USER} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
-    echo "${NB_USER}:slurm" |chpasswd && \
-    fix-permissions "/home/${NB_USER}" && \
-    chown -R ${NB_USER}:${NB_GROUP} /opt
+RUN usermod --login slurm --move-home --home /home/slurm jovyan && \
+    groupadd -g 1000 slurm && \
+    usermod -g slurm slurm && \
+    usermod -a -G users slurm && \
+    usermod -a -G sudo slurm &&  \
+    echo "slurm ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    echo "slurm:slurm" |chpasswd && \
+    fix-permissions "/home/slurm"
+RUN chown -R slurm:slurm /opt
+#COPY --from=0 --chown=slurm:slurm /opt /opt
 
 
 # copy daemons starters
@@ -88,19 +89,20 @@ RUN fix-permissions "${CONDA_DIR}" && \
     'r-magrittr' 'r-webshot2' && \
     mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
-    fix-permissions "/home/${NB_USER}" && \
+    fix-permissions "/home/slurm" && \
     jupyter labextension install @jupyter-widgets/jupyterlab-manager && \
     jupyter labextension install qgrid2
 
 # Install eclipse for development porposes
+# Edit: change the download source
 RUN cd /tmp && \
-    apt update && \
-    apt install -y default-jre x11-apps libswt-gtk-4-jni && \
-    wget https://mirror.umd.edu/eclipse/technology/epp/downloads/release/2023-12/R/eclipse-embedcpp-2023-12-R-linux-gtk-x86_64.tar.gz && \
-    tar xf eclipse-embedcpp-2023-12-R-linux-gtk-x86_64.tar.gz -C /opt && \
+    apt-get update && \
+    apt-get install -y default-jre x11-apps libswt-gtk-4-jni && \
+    wget http://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/2024-03/R/eclipse-embedcpp-2024-03-R-linux-gtk-x86_64.tar.gz && \
+    tar xf download.php?file=%2Ftechnology%2Fepp%2Fdownloads%2Frelease%2F2024-03%2FR%2Feclipse-embedcpp-2024-03-R-linux-gtk-x86_64.tar.gz -C /opt && \
     ln -s /opt/eclipse/eclipse /usr/local/bin/ && \
-    rm eclipse-embedcpp-2023-12-R-linux-gtk-x86_64.tar.gz && \
-    chown -R ${NB_USER}:${NB_GROUP} /opt/eclipse /usr/local/bin/eclipse
+    rm download.php?file=%2Ftechnology%2Fepp%2Fdownloads%2Frelease%2F2024-03%2FR%2Feclipse-embedcpp-2024-03-R-linux-gtk-x86_64.tar.gz && \
+    chown -R slurm:slurm /opt/eclipse /usr/local/bin/eclipse
 
 ARG DEBIAN_FRONTEND=noninteractive
 EXPOSE  6080
@@ -136,6 +138,7 @@ RUN apt-get update \
     procps \
     sudo \
     wget \
+    libjson-c-dev \
   && wget -q "https://download2.rstudio.org/server/jammy/amd64/rstudio-server-2023.12.1-402-amd64.deb" \
   && dpkg -i rstudio-server-*-amd64.deb \
   && rm rstudio-server-*-amd64.deb \
@@ -185,12 +188,12 @@ RUN apt-get update \
 #  && echo '#!/bin/bash \
 #          \n rstudio-server stop' \
 #          > /etc/services.d/rstudio/finish \
-  && mkdir -p /home/${NB_USER}/.rstudio/monitored/user-settings \
+  && mkdir -p /home/slurm/.rstudio/monitored/user-settings \
   && echo 'alwaysSaveHistory="0" \
           \nloadRData="0" \
           \nsaveAction="0"' \
-          > /home/${NB_USER}/.rstudio/monitored/user-settings/user-settings \
-  && chown -R ${NB_USER}:${NB_GROUP} /home/${NB_USER}/.rstudio
+          > /home/slurm/.rstudio/monitored/user-settings/user-settings \
+  && chown -R slurm:slurm /home/slurm/.rstudio
 
 #COPY userconf.sh /etc/cont-init.d/userconf
 #
@@ -213,13 +216,21 @@ RUN echo "#!/usr/bin/env bash" > /usr/local/bin/before-notebook.d/start-servises
     echo "/usr/local/sbin/cmd_start mysqld" >> /usr/local/bin/before-notebook.d/start-servises && \
     chmod 755 /usr/local/bin/before-notebook.d/start-servises
 
-COPY --chown=${NB_USER}:${NB_GROUP} . /opt/slurm_sim_tools
+COPY --chown=slurm:slurm . /opt/slurm_sim_tools
+
+# Edit: intasll GLib
+RUN apt-get update && \
+    apt-get install -y libglib2.0-dev
+
+# Edit: install gtk+
+RUN apt-get update && \
+    apt-get install -y libgtk2.0-dev
 
 # build optimized version
 RUN mkdir -p /opt/slurm_sim_bld/slurm_sim_opt && \
     cd /opt/slurm_sim_bld/slurm_sim_opt && \
     /opt/slurm_sim_tools/slurm_simulator/configure --prefix=/opt/slurm_sim \
-        --disable-x11 --enable-front-end \
+        --disable-x11 --enable-front-end --disable-dependency-tracking \
         --with-hdf5=no \
         CFLAGS='-O3 -Wno-error=unused-variable -Wno-error=implicit-function-declaration' \
         --enable-simulator && \
@@ -228,7 +239,7 @@ RUN mkdir -p /opt/slurm_sim_bld/slurm_sim_opt && \
     mkdir -p /opt/slurm_sim_bld/slurm_sim_deb && \
     cd /opt/slurm_sim_bld/slurm_sim_deb && \
     /opt/slurm_sim_tools/slurm_simulator/configure --prefix=/opt/slurm_sim_deb \
-        --disable-x11 --enable-front-end \
+        --disable-x11 --enable-front-end --disable-dependency-tracking \
         --enable-developer --disable-optimizations --enable-debug \
         --with-hdf5=no \
        'CFLAGS=-g -O0 -Wno-error=unused-variable -Wno-error=implicit-function-declaration' \
@@ -247,9 +258,9 @@ ENV PATH="/opt/slurm_sim_tools/bin:$PATH" \
 #    sudo DEBIAN_FRONTEND=noninteractive apt-get -y install tzdata
 
 # python
-#RUN  sudo apt install -y python3-pandas python3-jupyterlab-server jupyter \
-#     python3-pip python3-arrow cython3 python3-pymysql python3-pytest python3-pytest-datadir \
-#     python3-venv
+RUN  sudo apt install -y python3-pandas python3-jupyterlab-server jupyter \
+     python3-pip python3-arrow cython3 python3-pymysql python3-pytest python3-pytest-datadir \
+     python3-venv
 
 
 #sudo DEBIAN_FRONTEND=noninteractive sudo apt install -y tzdata
@@ -258,5 +269,5 @@ ENV PATH="/opt/slurm_sim_tools/bin:$PATH" \
 #sudo apt-get install r-base
 #sudo apt-get install gdebi-core
 #sudo gdebi rstudio-server-2023.12.1-402-amd64.deb
-ARG DEBIAN_FRONTEND=noninteractive
+#ARG DEBIAN_FRONTEND=noninteractive
 USER root

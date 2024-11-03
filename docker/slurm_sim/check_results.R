@@ -56,7 +56,7 @@ for(row in 1:nrow(joined))
       check_nodes(joined, row, "sim_features", "CPU-N", "NodeList", "n") && # N cpu
       check_nodes(joined, row, "sim_gres", "gpu:1", "NodeList", "g") && # 1 gpu
       check_nodes(joined, row, "sim_gres", "gpu:2", "NodeList", "g") # 2 gpu
-  	
+	
 	# if at any point a feature doesn't match, breaks out of the loop
 	if(!done_well) 
 	{
